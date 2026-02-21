@@ -9,7 +9,11 @@ const app = express();
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:5173', // React dev server
+  origin: [
+    'http://localhost:5173',           // Local dev
+    'https://airawat-frontend.vercel.app',  // Production
+    'https://airawat-frontend-*.vercel.app' // Preview deploys
+  ],
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' })); // Image URLs
