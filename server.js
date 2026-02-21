@@ -142,16 +142,57 @@ mongoose.connect(process.env.MONGODB_URI)
       }
     });
 
+   // 🔥 AUTO STOCK UPDATE - COMPLETE E-COMMERCE!
     app.post('/api/orders', async (req, res) => {
       try {
-        const orderData = { ...req.body, id: Date.now() };
+        const { userId, items, total, shippingAddress, date } = req.body;
+        
+        console.log('🛒 NEW ORDER:', { userId, itemsCount: items.length, total });
+        
+        // 🔥 STEP 1: VALIDATE STOCK (atomic check)
+        for (const item of items) {
+          const product = await Product.findOne({ id: parseInt(item.id) });
+          console.log(`📦 ${item.name}: current=${product?.stock}, requested=${item.quantity}`);
+          
+          if (!product || product.stock < item.quantity) {
+            return res.status(400).json({ 
+              error: `❌ Insufficient stock for ${item.name}. Available: ${product?.stock || 0}` 
+            });
+          }
+        }
+        
+        // 🔥 STEP 2: CREATE ORDER
+        const orderData = { 
+          ...req.body, 
+          id: Date.now(),
+          status: 'pending'
+        };
         const order = new Order(orderData);
         await order.save();
-        res.status(201).json(order);
+        
+        // 🔥 STEP 3: ATOMIC STOCK REDUCTION
+        for (const item of items) {
+          await Product.findOneAndUpdate(
+            { id: parseInt(item.id) },
+            { $inc: { stock: -item.quantity } },  // ✅ Atomic decrement!
+            { new: true }
+          );
+          console.log(`✅ ${item.name}: -${item.quantity} stock`);
+        }
+        
+        console.log(`🎉 Order #${order.id} COMPLETE! Stock auto-updated!`);
+        res.status(201).json({ 
+          success: true, 
+          id: order.id,
+          message: 'Order created + Stock automatically updated!'
+        });
+        
       } catch (error) {
+        console.error('❌ Order error:', error);
         res.status(400).json({ error: error.message });
       }
     });
+
 
     app.put('/api/orders/:id', async (req, res) => {
       try {
